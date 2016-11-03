@@ -1,0 +1,91 @@
+---
+title: "Selecting 1000 DE genes"
+output: html_document
+---
+
+#
+#
+##### Set working directory and load packages and data
+```{r, echo=TRUE, results = "asis", warning = FALSE, message = FALSE, eval=FALSE} 
+setwd("PATH to your working direction")
+library(edgeR)
+library(DESeq)
+library(DESeq2)
+load("Skin.Expression.data.RData")
+counts<-as.matrix(GTEX.Skin.Expr)
+
+#or for Muscle data:
+#load("Muscle.Expression.data.RData")
+#counts<-as.matrix(GTEX.Muscle.Expr)
+```
+
+#
+##### Filtering Genes out with less than 1 cpm in at least half of the samples 
+```{r, echo=TRUE, results = "asis", warning = FALSE, message = FALSE, eval=FALSE} 
+d<-as.numeric(dim(counts)[2])/2
+counts<-counts[which(rowSums(cpm(counts)>1) >= d),]
+```
+
+#
+##### Alalyse genes for differential expression using edgeR, FDR=0.05
+```{r, echo=TRUE, results = "asis", warning = FALSE, message = FALSE, eval=FALSE} 
+d <- DGEList(counts, group= group)
+d <- calcNormFactors(d)
+d <- estimateCommonDisp(d)
+d <- estimateTagwiseDisp(d)
+de<-exactTest(d)
+DE<-de$table
+padj<-p.adjust(DE$PValue, method="fdr")
+DE<-cbind(DE,padj)
+deSig <- DE[which(DE$padj<0.05),]
+```
+
+#
+##### Alalyse genes for differential expression using DESeq2,FDR=0.05
+```{r, echo=TRUE, results = "asis", warning = FALSE, message = FALSE, eval=FALSE} 
+pheno<-as.data.frame(group)
+row.names(pheno)<- colnames(counts)
+colnames(pheno)<- "condition"
+ds2 <- DESeqDataSetFromMatrix(countData=counts, colData=pheno, design = ~ condition )
+ds2 <- DESeq(ds2)
+res2 <-results(ds2)
+resSig <- res2[which(res2$padj<0.05),]
+```
+
+#
+##### Alalyse genes for differential expression using DESeq,FDR=0.05
+```{r, echo=TRUE, results = "asis", warning = FALSE, message = FALSE, eval=FALSE} 
+ds <- newCountDataSet(counts, group )
+ds <- estimateSizeFactors( ds )
+ds <- estimateDispersions( ds )
+res <- nbinomTest(ds, "0", "1")
+DeSig <- res[which(res$padj<0.05),]
+```
+
+#
+##### Identify the interection of DE genes with a predefined fold change in all three packages
+```{r, echo=TRUE, results = "asis", warning = FALSE, message = FALSE, eval=FALSE} 
+# Set fold change (1.5, 2 or 2.5)
+fc<-2
+
+##edgeR##
+deSigFC1<-deSig[which(abs(deSig$logFC) >= log2(fc)), ]
+sG.names1<-as.matrix(row.names(deSigFC1))
+
+##DESeq2##
+deSigFC2<-resSig[which((abs(resSig$log2FoldChange))>= log2(fc)), ]
+sG.names2<-as.matrix(row.names(deSigFC2))
+
+##DESeq##
+deSigFC3<-DeSig[which(abs(DeSig$log2FoldChange) >= log2(fc)), ]
+sG.names3<-as.matrix(deSigFC3$id)
+
+sG.names<-Reduce(intersect,list(sG.names1,sG.names2,sG.names3))
+
+# Randomly selecting 1000 DE genes 
+set.seed(679)
+a<-sample(seq(1:dim(sG)[[1]]))[1:1000] 
+sG.names<-sG.names[a,]
+save(sG.names, counts, group, file = "selected_genes_Skin_1000_FC_2.RData" )
+#save(sG.names, counts, group, file = "selected_genes_Muscle_1000_FC_2.RData" )
+```

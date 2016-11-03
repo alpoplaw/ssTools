@@ -1,0 +1,101 @@
+---
+title: "DEseq_simulation"
+output: html_document
+---
+#
+#
+##### Set working directory and load packages and data
+```{r, echo=TRUE, results = "asis", warning = FALSE, message = FALSE, eval=FALSE} 
+setwd("PATH to your working direction/DESeq2/")
+library(edgeR)
+library(parallel)
+load("selected_genes_Skin_1000_FC_2.RData")
+
+# or for Muscle data:
+# load("selected_genes_Muscle_1000_FC_2.RData"")
+```
+
+#
+##### Split data in case (ne) and control (e) pool
+```{r, echo=TRUE, results = "asis", warning = FALSE, message = FALSE, eval=FALSE} 
+gs<-as.numeric(dim(counts)[1])
+CT<-rbind(counts, group)
+e<-CT[,which(CT[gs+1,]==2)]     # Skin: sun-exposed      
+ne<-CT[,which(CT[gs+1,]==1)]    # Skin: non-sun-exposed   
+#ne<-CT[,which(CT[gs+1,]==2)]   # Muscle:Skeletal
+#e<-CT[,which(CT[gs+1,]==1)]    # Muscle:Esophagus
+e<-e[1:gs,]
+ne<-ne[1:gs,]
+ne<-as.data.frame(ne)
+e<-as.data.frame(e)
+```
+
+#
+##### Perform simulation for 2 to 30 samples with 100 resampling steps
+```{r, echo=TRUE, results = "asis", warning = FALSE, message = FALSE, eval=FALSE} 
+set.seed(679)
+ncores = 20 #Parallelization
+
+simout<-mclapply(1:100, function(arg2){
+    DESeqout<-lapply(2:30, function(arg){
+    set.seed(arg*arg2)
+    counts<-sample(e,arg*2, replace=FALSE)
+    b<-sample(ne,arg, replace=FALSE)
+    counts[sG.names2,(1:arg)]<-b[sG.names2,]
+    condition<-as.factor(cbind(c(rep(0,arg), c(rep(1,arg)))))
+    d <- newCountDataSet(counts, condition )
+    d <- estimateSizeFactors( d )
+    d <- estimateDispersions( d )
+    d <- nbinomTest(d, "0", "1")
+    return(d)})
+    DESeqout},mc.cores=ncores)
+
+save.image(file = "/simulation_results.RData")
+```
+
+#
+##### Extract sample size, mean sample size and standard deviation for selected power values (0.70, 0.75, 0.80, 0.85, 0.90 and 0.95)
+```{r, echo=TRUE, results = "asis", warning = FALSE, message = FALSE, eval=FALSE} 
+TP<-matrix(c(rep(NA,2900)), nrow=100)
+ss<-seq(2,30,1)
+
+j<-1
+repeat{
+  for ( i in 1:29 ) {
+    deSig<- simout[[j]] [[i]] [which(simout[[j]] [[i]]$padj<0.05),]
+    #deSig<- deSig [which(deSig$logFC>=1),]
+    tp<-match(sG.names2,row.names(deSig))
+    TP[j,i]<-length(which( !is.na(tp) )) #True Positives
+  }
+  j<-j+1
+  if (j>100) break
+}
+
+TPP<-TP/1000 # Percentage of detected DE genes of the selected 1000 genes
+colnames(TPP)<-ss
+
+PS<-matrix(c(rep("NA",600)), ncol=100)
+row.names(PS)<-(seq(70,95,5) )
+
+for ( i in 1:100 ) {
+  PS[1,i]<-min(as.numeric(colnames(TPP[,which(TPP[i,]>=0.7)])))
+  PS[2,i]<-min(as.numeric(colnames(TPP[,which(TPP[i,]>=0.75)])))
+  PS[3,i]<-min(as.numeric(colnames(TPP[,which(TPP[i,]>=0.8)])))
+  PS[4,i]<-min(as.numeric(colnames(TPP[,which(TPP[i,]>=0.85)])))
+  PS[5,i]<-min(as.numeric(colnames(TPP[,which(TPP[i,]>=0.9)])))
+  PS[6,i]<-min(as.numeric(colnames(TPP[,which(TPP[i,]>=0.95)])))
+}
+
+Mean<-rep("NA",6)
+for ( j in 1:6 ) {
+  Mean[j]<-mean(as.numeric(PS[j,]))
+}
+
+SD<-rep("NA",6)
+for ( j in 1:6 ) {
+  SD[j]<-sd(PS[j,])
+}
+PS<-cbind(PS,Mean,SD)
+
+write.csv(PS, "/SampleSize.csv")
+```
