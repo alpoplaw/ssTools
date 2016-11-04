@@ -16,16 +16,18 @@ Steps:
 3. Identify the intersection of DE genes with a predefined fold change in all three packages.  
 4. Randomly selecting 1000 DE genes out of the intersection.  
 
-## edgeR simulation, DESeq2 simulation and DESeq simulation
+## edgeR simulation/ DESeq2 simulation/ DESeq simulation
 
 R codes for the simulation. Input see "Selecting 1000 DE genes".
 
 ##  Create Pilot Data
 
-R codes for generation of 10 pilot data. Input see "Selecting 1000 DE genes".   
+R codes for generation of 10 pilot data and extracting tool input parameter from the pilot data. The code for parameter extracting is based on the code provided by ssizeRNA. The code for PROPER parameter extraction was provided by Hao Wu.  
+Input see "Selecting 1000 DE genes".   
 
 ## Sample Size Estimation
 Code to estimate the sample size using the 10 generated pilot data and the following tools:    
+   
 PROPER http://www.bioconductor.org/packages/release/bioc/html/PROPER.html  
 RNASeqPowerCalculator http://www2.hawaii.edu/~lgarmire/RNASeqPowerCalculator.htm  
 RnaSeqSampleSize http://www.bioconductor.org/packages/release/bioc/html/RnaSeqSampleSize.html  
@@ -33,11 +35,11 @@ ssizeRNA https://cran.r-project.org/web/packages/ssizeRNA/index.html
 SSPA http://www.bioconductor.org/packages/release/bioc/html/SSPA.html  
    
 For the estimation with Scotty the MATLAB code https://github.com/mbusby/Scotty, with the following command was used.  
-scottyEstimate('PATH to your working direction\pilotdata\Skin_1000DE\FC_2\for_Scotty\pilot31.csv',...
-    '3','3','75','2.5','0.05','80','2.541','2.541','8.874',...
-    '1000000','20','50000000','100000000','50','50','50',...
-    'PATH to your working direction\resluts\Skin_1000DE\FC_2\Scotty\31\');
-    
+scottyEstimate('PATH to your working direction\pilotdata\Skin_1000DE\FC_2\for_Scotty\pilot31.csv',...   
+    '3','3','75','2.5','0.05','80','2.541','2.541','8.874',...   
+    '1000000','20','50000000','100000000','50','50','50',...   
+    'PATH to your working direction\resluts\Skin_1000DE\FC_2\Scotty\31\');   
+     
 ## Contact
 
 alpoplaw@uni-mainz.de
