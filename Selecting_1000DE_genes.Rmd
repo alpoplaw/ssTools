@@ -87,8 +87,8 @@ sG.names<-Reduce(intersect,list(sG.names1,sG.names2,sG.names3))
 ##### Randomly selecting 1000 DE genes 
 ```{r, echo=TRUE, results = "asis", warning = FALSE, message = FALSE, eval=FALSE} 
 set.seed(679)
-a<-sample(seq(1:dim(sG)[[1]]))[1:1000] 
-sG.names<-sG.names[a,]
+a<-sample(seq(1:length(sG.names)[[1]]))[1:1000] 
+sG.names<-sG.names[a]
 save(sG.names, counts, group, file = "selected_genes_Skin_1000_FC_2.RData" )
 #save(sG.names, counts, group, file = "selected_genes_Muscle_1000_FC_2.RData" )
 ```
