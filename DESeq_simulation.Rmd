@@ -12,7 +12,7 @@ library(parallel)
 load("selected_genes_Skin_1000_FC_2.RData")
 
 # or for Muscle data:
-# load("selected_genes_Muscle_1000_FC_2.RData"")
+# load("selected_genes_Muscle_1000_FC_2.RData")
 ```
 
 #

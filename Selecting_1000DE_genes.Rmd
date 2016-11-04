@@ -63,7 +63,7 @@ DeSig <- res[which(res$padj<0.05),]
 ```
 
 #
-##### Identify the interection of DE genes with a predefined fold change in all three packages
+##### Identify the intersection of DE genes with a predefined fold change in all three packages
 ```{r, echo=TRUE, results = "asis", warning = FALSE, message = FALSE, eval=FALSE} 
 # Set fold change (1.5, 2 or 2.5)
 fc<-2
@@ -81,8 +81,11 @@ deSigFC3<-DeSig[which(abs(DeSig$log2FoldChange) >= log2(fc)), ]
 sG.names3<-as.matrix(deSigFC3$id)
 
 sG.names<-Reduce(intersect,list(sG.names1,sG.names2,sG.names3))
+```
 
-# Randomly selecting 1000 DE genes 
+#
+##### Randomly selecting 1000 DE genes 
+```{r, echo=TRUE, results = "asis", warning = FALSE, message = FALSE, eval=FALSE} 
 set.seed(679)
 a<-sample(seq(1:dim(sG)[[1]]))[1:1000] 
 sG.names<-sG.names[a,]
