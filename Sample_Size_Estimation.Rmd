@@ -1,0 +1,324 @@
+---
+title: "Sample Size Estimation"
+output: html_document
+---
+#
+#
+##### Set working directory and load packages and data
+```{r, echo=TRUE, results = "asis", warning = FALSE, message = FALSE, eval=FALSE} 
+setwd("PATH to your working direction/")
+library(MASS)
+library(edgeR)
+library(DESeq)
+library(DESeq2)
+library(sSeq)
+library(EBSeq)
+library(PROPER)
+library(RnaSeqSampleSize)
+library(ssizeRNA)
+library(SSPA)
+library(lattice)
+```
+
+#
+##### PROPER 
+```{r, echo=TRUE, results = "asis", warning = FALSE, message = FALSE, eval=FALSE} 
+
+j<-1
+repeat{
+  file0<-paste("pilotdata/Skin_1000DE/FC_2/pilot3",j,".RData", sep="")
+  load(file0)
+  file1<-paste("pilotdata/Skin_1000DE/FC_2/for_PROPER/pilot3",j,".RData", sep="")
+  load(file1)
+
+# For estimation using own pilot data:
+sim.opts = RNAseq.SimOptions.2grp (ngenes = N,p.DE=DE_proz,lOD= param$lOD, seqDepth = param$seqDepth, lBaselineExpr= param$lmean, sim.seed= 123)
+
+# If Cheung data should be used:
+#sim.opts = RNAseq.SimOptions.2grp (ngenes = N,p.DE=DE_proz,lOD= "cheung", seqDepth = "cheung", lBaselineExpr= "cheung",sim.seed= 123)
+
+simres = runSims(Nreps = c(seq(2,50,1)), sim.opts=sim.opts,DEmethod="edgeR", nsims= 100) 
+#Nreps= number of replicates;nsims: number of simulations 
+
+  
+file2<-paste("resluts/Skin_1000DE/FC_2/PROPER/3",j,"/simres.RData", sep="")
+save(simres,sim.opts,file=file2)
+
+powers = comparePower(simres, alpha.type="fdr", alpha.nominal=0.05,stratify.by="expr", delta=log2(2)) #Set fold change
+power.table<-summaryPower(powers)
+
+file3<-paste("resluts/Skin_1000DE/FC_2/PROPER/3",j,"/power.table.csv", sep="")
+write.csv(power.table, file3)
+
+j<-j+1
+if (j>10) break
+}
+```
+
+#
+##### RNASeqPowerCalculator 
+first download RNASeqPowerCalculator http://www2.hawaii.edu/~lgarmire/RNASeqPowerCalculator.htm
+```{r, echo=TRUE, results = "asis", warning = FALSE, message = FALSE, eval=FALSE} 
+source("/rs_simulations.r") # PATH to RNASeqPowerCalculator
+
+j<-1
+repeat{
+    file0<-paste("pilotdata/Skin_1000DE/FC_2/pilot3",j,".RData", sep="")
+    load(file0)
+
+condition = c(rep("A", 3),rep("B", 3)) # adapt for number of replicates
+rawdata = counts
+condition = as.character(condition)
+condition[condition==unique(condition)[1]] <- "A"
+condition[condition==unique(condition)[2]] <- "B"
+sort_order = order(condition)
+condition = condition[sort_order]
+rawdata = rawdata[,sort_order]
+
+#of_estimate_params
+y <- DGEList(counts=rawdata)
+y <- calcNormFactors(y)
+
+design <- model.matrix(~factor(condition))
+rownames(design) <- colnames(y)
+dispCoxReidInterpolateTagwise (y$counts, design=design, offset=getOffset(y), dispersion=.1, trend=FALSE, AveLogCPM=NULL, min.row.sum=5, prior.df=0, span=0.3, grid.npts=15, grid.range=c(-8,8)) -> dispsCR
+sample_data = data.frame(condition)
+sample_data$libsize = log(colSums(y$counts))
+libsize = sample_data$libsize
+nofit = 1000000
+fc = matrix(nrow=dim(y$counts)[1], ncol=2)
+for(i in 1:dim(y$counts)[1]) {
+  f <- negative.binomial(link="log",theta=1/dispsCR[i])
+  tryCatch({glm(y$counts[i,] ~ condition + 0, offset=libsize, family=f) -> fit},
+           warning=function(w) {assign('nofit', c(nofit, i), parent.env(environment()))})
+  fc[i,] <- fit$coefficients
+}
+y <- DGEList(counts=rawdata[-nofit,])
+params<-list(y=y, fc=fc[-nofit,], dispsCR = dispsCR[-nofit], sample_data=sample_data, nofit=nofit)
+
+#de <- of_DE_call(rawdata[-params$nofit,], condition)
+
+#DESeq2#
+dds <- DESeqDataSetFromMatrix(countData = rawdata, colData = data.frame(condition), design = ~condition)
+dds <- estimateSizeFactors(dds)
+dds <- estimateDispersions(dds)
+dds <- nbinomWaldTest(dds)
+res <- results(dds)
+pval = res$pval
+padj = res$padj
+res = cbind(pval, padj)
+ds2 <- as.matrix(res)
+rm(res, pval, padj)	
+
+#DESeq#
+DESeq_cds = newCountDataSet(rawdata, condition)
+DESeq_cds = estimateSizeFactors(DESeq_cds)
+DESeq_cds = estimateDispersions(DESeq_cds)
+pval = nbinomTest(DESeq_cds, unique(condition)[1],unique(condition)[2], pvals_only=TRUE)
+padj = p.adjust( pval, method="BH")
+res = cbind(pval, padj)
+ds <- as.matrix(res)
+rm(res, pval, padj)	
+
+#edgeR#
+edgeR_cds = DGEList(rawdata, group = condition )
+edgeR_cds = calcNormFactors( edgeR_cds )
+edgeR_cds = estimateCommonDisp( edgeR_cds )
+edgeR_cds = estimateTagwiseDisp( edgeR_cds )
+res = exactTest(edgeR_cds, pair =c(unique(condition)[1],unique(condition)[2]))$table
+pval = res$PValue
+padj = p.adjust( pval, method="BH")
+res = cbind(pval, padj)
+er <- as.matrix(res)
+rm(res, pval, padj)	
+
+#sSeq#
+as.character(condition) -> sSeq_condition
+res <- nbTestSH(rawdata, sSeq_condition, condA = unique(sSeq_condition)[1],condB = unique(sSeq_condition)[2])
+pval = res$pval
+padj = p.adjust( pval, method="BH")
+res = cbind(pval, padj)
+ss <- as.matrix(res)
+rm(res, pval, padj)	
+
+#EBSeq
+Sizes = MedianNorm(rawdata)
+EBOut = EBTest(Data = rawdata, Conditions = condition,sizeFactors = Sizes, maxround = 5)
+data.frame(pval=1-GetPP(EBOut)) -> temp0
+temp1 = rawdata
+merge(temp1, temp0, all.x=TRUE, by.x=0, by.y=0)-> temp2
+pval = temp2[,"pval"]
+names(pval) = temp2[,"Row.names"]
+pval = pval[rownames(rawdata)]
+padj = pval
+res = cbind(pval, padj)
+eb <- as.matrix(res)
+rm(res, pval, padj)	
+
+
+# original code; use of all 5 packages to define DE genes
+packages = c("ds2", "ds","er","ss", "eb")
+de = rep(TRUE, dim(rawdata)[1])
+for(i in packages) {
+  temp = length(which(get(i)[,"padj"] < 0.05))
+  print(paste(i,": number of DE called",temp))
+  de = de & get(i)[,"padj"] < 0.05
+}	
+print(paste("intersection :",length(which(de))))
+de[is.na(de)] <- FALSE
+params[["de"]] <- de
+file1<-paste("resluts/Skin_1000DE/FC_2/RNASeqPowerCalculator/3",j,"/parms5.RData", sep="")
+save(params, file=file1)
+
+# changed code; use of 4 packages (without DESeq) to define DE genes
+packages = c("ds2","er","ss", "eb")
+de = rep(TRUE, dim(rawdata)[1])
+for(i in packages) {
+  temp = length(which(get(i)[,"padj"] < 0.05))
+  print(paste(i,": number of DE called",temp))
+  de = de & get(i)[,"padj"] < 0.05
+}	
+print(paste("intersection :",length(which(de))))
+de[is.na(de)] <- FALSE
+params[["de"]] <- de
+file3<-paste("resluts/Skin_1000DE/FC_2/RNASeqPowerCalculator/3",j,"/parms4.RData", sep="")
+save(params, file=file3)
+
+# changed code; use of only 2 packages (edgeR and DESeq2) to define DE genes
+packages = c("ds2","er")
+de = rep(TRUE, dim(rawdata)[1])
+for(i in packages) {
+  temp = length(which(get(i)[,"padj"] < 0.05))
+  print(paste(i,": number of DE called",temp))
+  de = de & get(i)[,"padj"] < 0.05
+}	
+print(paste("intersection :",length(which(de))))
+de[is.na(de)] <- FALSE
+params[["de"]] <- de
+file2<-paste("resluts/Skin_1000DE/FC_2/RNASeqPowerCalculator/3",j,"/parms2.RData", sep="")
+save(params, file=file2)
+
+results = RS_simulation (budget=100000, per_sample_price = 241, lane_size = 150e6, lane_price = 1331, mapping_proportion = 0.2,
+                         sims = 100, params, designtype = "one factor", nmax = 20, nmin = 2, program="edgeR")
+
+file4<-paste("resluts/Skin_1000DE/FC_2/RNASeqPowerCalculator/3",j,"/power_edgeR_2.pdf", sep="")
+pdf(file4)
+plot(rownames(results),rowMeans(results, na.rm=T), main="edgeR simulations", xlab = "number of replicates", ylab = "Power")
+dev.off()
+file5<-paste("resluts/Skin_1000DE/FC_2/RNASeqPowerCalculator/3",j,"/power_edgeR_2.csv", sep="")
+write.csv(results, file5)
+
+j<-j+1
+if (j>10) break
+}
+```
+
+#
+##### RnaSeqSampleSize
+```{r, echo=TRUE, results = "asis", warning = FALSE, message = FALSE, eval=FALSE} 
+
+j<-1
+repeat{
+  file0<-paste("pilotdata/Skin_1000DE/FC_2/pilot3",j,".RData", sep="")
+  load(file0)
+
+FC<-2
+  
+#Estitamete the gene read count and dispersion distribution (Disp=dispersion distribution, BCV=gene read count)
+dataMatrixDistribution<-est_count_dispersion(counts, group=c(rep(0,3),rep(1,3)))
+
+#Sample size estimation by read count and dispersion distribution
+f=0.05; rho=FC
+p70<-sample_size_distribution(power=0.7,f=f,rho=rho, distributionObject=dataMatrixDistribution, repNumber=100,showMessage=TRUE)
+p75<-sample_size_distribution(power=0.75,f=f,rho=rho, distributionObject=dataMatrixDistribution, repNumber=100,showMessage=TRUE)
+p80<-sample_size_distribution(power=0.8,f=f,rho=rho, distributionObject=dataMatrixDistribution, repNumber=100,showMessage=TRUE)
+p85<-sample_size_distribution(power=0.85,f=f,rho=rho, distributionObject=dataMatrixDistribution, repNumber=100,showMessage=TRUE)
+p90<-sample_size_distribution(power=0.9,f=f,rho=rho, distributionObject=dataMatrixDistribution, repNumber=100,showMessage=TRUE)
+p95<-sample_size_distribution(power=0.95,f=f,rho=rho, distributionObject=dataMatrixDistribution, repNumber=100,showMessage=TRUE)
+
+power<-cbind(p70,p75,p80,p85,p90,p95)
+file6<-paste("resluts/Skin_1000DE/FC_2/RNASeqPowerCalculator/power_3",j,".csv", sep="")
+write.csv(power, file6)
+
+j<-j+1
+if (j>10) break
+}
+```
+
+#
+##### ssizeRNA
+```{r, echo=TRUE, results = "asis", warning = FALSE, message = FALSE, eval=FALSE} 
+j<-1
+repeat{
+  file0<-paste("pilotdata/Skin_1000DE/FC_2/pilot3",j,".RData", sep="")
+  load(file0)
+
+logfc<-log2(2)
+  
+nG = N; pi0= 1-DE_proz ; up = DE_proz_up
+
+file7<-paste("resluts/Skin_1000DE/FC_2/ssizeRNA/power_plot_3",j,".pdf", sep="")
+pdf(file=file7)
+size<-ssizeRNA_vary(nG = nG, pi0 = pi0, mu=mu, disp=disp, logfc=logfc, up = up,
+              replace = TRUE, m = 200, fdr = 0.05, power = c(seq(0.7,0.95,0.05)), maxN = 100,
+              side = "two-sided", cex.title = 1.15, cex.legend = 1)
+dev.off()
+
+file8<-paste("resluts/Skin_1000DE/FC_2/ssizeRNA/power.Table_3",j,".csv", sep="")
+write.csv(size$power, file8, row.names=FALSE)
+
+j<-j+1
+if (j>10) break
+}
+```
+
+#
+##### SSPA
+```{r, echo=TRUE, results = "asis", warning = FALSE, message = FALSE, eval=FALSE} 
+
+j<-1
+repeat{
+  file0<-paste("pilotdata/Skin_1000DE/FC_2/pilot3",j,".RData", sep="")
+  load(file0)
+dge <- DGEList(counts, group= group)
+design <- model.matrix(~group, data=dge$samples) 
+dispersion <- estimateGLMCommonDisp(dge, design)
+dispersion <- estimateGLMTagwiseDisp(dispersion, design)
+glmfit <- glmFit(dge, design, dispersion = dispersion$tagwise.dispersion)
+lrt <- glmLRT(glmfit)
+tbl <- topTags(lrt, n=nrow(dge))[[1]]
+statistics <- tbl$LR
+
+pd <- pilotData(statistics=statistics,
+                samplesize=1, distribution="chisq", df=logfc)
+
+ss <- sampleSize(pd, method="congrad", 
+                 control=list(trim=c(0, 0.95), symmetric=FALSE, from=0, to=10) )
+if (ss@pi0<1)
+{
+samplesize<-c(seq(2,100,1)) 
+pwr <- predictpower(ss, samplesize=samplesize)
+s<-cbind(samplesize, pwr)
+
+file9<-paste("resluts/Skin_1000DE/FC_2/SSPA/power.Table_3",j,".csv", sep="")
+write.csv(s, file9, row.names=FALSE)
+op <- par(mfcol=c(2,1), mar=c(5,4,1,1))
+
+file10<-paste("resluts/Skin_1000DE/FC_2/SSPA/powerplot_3",j,".pdf", sep="")
+pdf(file= file10)
+plot(ss@theta, ss@lambda, 
+     xlab="effect size", ylab="", type="l")
+plot(samplesize, pwr, 
+     xlab="sample size", ylab="power", type="b", ylim=c(0.7,1))
+grid(col=1)
+par(op)
+dev.off()
+} else {
+  file11<-paste("resluts/Skin_1000DE/FC_2/SSPA/error_3",j,".csv", sep="")
+    write.csv(ss@pi0, file11, row.names=FALSE)
+}
+
+j<-j+1
+if (j>10) break
+}
+```
