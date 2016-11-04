@@ -1,0 +1,215 @@
+---
+title: "Create Pilot Data"
+output: html_document
+---
+
+#
+#
+##### Set working directory and load packages and data
+```{r, echo=TRUE, results = "asis", warning = FALSE, message = FALSE, eval=FALSE} 
+setwd("PATH to your working direction")
+library(edgeR)
+library(DESeq2)
+library(Biobase)
+load("selected_genes_Skin_1000_FC_2.RData")
+counts<-as.matrix(GTEX.Skin.Expr)
+
+#or for Muscle data:
+#load("selected_genes_Muscle_1000_FC_2.RData")
+#counts<-as.matrix(GTEX.Muscle.Expr)
+```
+
+#
+##### Create 10 different 2x3 pilot data  
+```{r, echo=TRUE, results = "asis", warning = FALSE, message = FALSE, eval=FALSE} 
+seed<-c(527, 381, 3408, 8965, 286, 296, 1654, 648, 333, 281)
+
+i<-1
+repeat{
+  set.seed(seed[i])  
+arg<-3 # Number of replicates
+counts<-sample(e,arg*2, replace=FALSE)
+b<-sample(ne,arg, replace=FALSE)
+counts[sG.names,(1:arg)]<-b[sG.names,]
+control <- paste0("control",1:arg)
+test <- paste0("test",1:arg)
+colnames(counts)<-cbind(control, test)
+file<-paste("pilotdata/Skin_1000DE/FC_2/pilot3",i,".csv", sep="")
+write.csv(counts, file)
+i<-i+1
+if (i>10) break 
+}
+```
+
+#
+##### Extract input informations for the the sample size tools from generated pilot data
+```{r, echo=TRUE, results = "asis", warning = FALSE, message = FALSE, eval=FALSE} 
+
+i<-1
+repeat{
+file<-paste("pilotdata/Skin_1000DE/FC_2/pilot3",i,".csv", sep="")
+counts <- as.matrix(read.csv(file, row.names=1))
+
+# for 3 replicates, change it for othe replicte values
+group<-as.factor(cbind(c(rep(0,3), c(rep(1,3))))) 
+
+geom.mean = function(row){
+  row[row == 0] = 0.1
+  if(length(row) != 0){
+    return(exp(sum(log(row))/length(row)))
+  } else{
+    return(0)
+  }
+}
+
+mu <- apply(counts, 1, geom.mean) ## geometric mean for each gene
+d <- DGEList(counts, group= group)
+d <- calcNormFactors(d)
+d <- estimateCommonDisp(d)
+d <- estimateTagwiseDisp(d)
+disp <- d$tagwise.dispersion ## dispersion for each gene
+
+FC<-2 # set fold change
+logfc <- log2(FC)
+N<-as.numeric(dim(counts)[1])
+
+cD<-(d$common.dispersion)
+pLS<-d$pseudo.lib.size
+seqDepth<-d$samples[,2]
+seqDepth_n<-d$samples[,2]
+names(seqDepth_n)<-row.names(d$samples)
+norm.factors<-d$samples[,3]
+norm.factors_n<-d$samples[,3]
+names(norm.factors_n)<-row.names(d$samples)
+disp_n<-disp
+names(disp_n)<-row.names(d$counts)
+disp_n<-as.matrix(disp_n)
+ldisp<-log(disp)
+ldisp_n<-ldisp
+names(ldisp_n)<-row.names(d)
+mu_n<-mu
+names(mu_n)<-row.names(d)
+
+de<-exactTest(d)
+DE<-de$table
+padj<-p.adjust(DE$PValue, method="fdr")
+DE<-cbind(DE,padj)
+deSig <- DE[which(DE$padj<0.05),]
+deSigFC_up<-deSig[which(deSig$logFC >= logfc),]
+deSigFC_down<-deSig[which(deSig$logFC <= -logfc),]
+deSigFC<-deSig[which(abs(deSig$logFC) >= logfc), ]
+absLFC<-abs(deSigFC$logFC)
+deSigFC<-cbind(deSigFC, absLFC)
+min(deSigFC$absLFC)
+DE_proz<-dim(deSigFC)[1]/N
+DE_proz_up<-dim(deSigFC_up)[1]/dim(deSigFC)[1]
+
+sig.names<-as.matrix(row.names(deSigFC))
+dg<-match(sig.names, row.names(counts))
+dg<-counts[dg,]
+disp_sigFC<-match(sig.names, row.names(disp_n))
+disp_sigFC<-disp_n[disp_sigFC, ]
+
+file2<-paste("pilotdata/Skin_1000DE/FC_2/pilot3",i,".RData", sep="")
+save.image(file2)
+i<-i+1
+if (i>10) break
+}
+```
+
+#
+##### Generate input file for Scotty
+```{r, echo=TRUE, results = "asis", warning = FALSE, message = FALSE, eval=FALSE} 
+
+i<-1
+repeat{
+  file<-paste("pilotdata/Skin_1000DE/FC_2/pilot3",i,".csv", sep="")
+  counts <- as.matrix(read.csv(file, row.names=1))
+N<-as.numeric(dim(counts)[1])
+Gene<-rep("Gene", N)
+c<-seq(1:N)
+d<-rep("_ID", N)
+Gene<-paste(Gene,c,d, sep="")
+counts2<-counts
+counts2<-cbind(Gene,counts)
+
+# for 3 replicates, change it for othe replicte values
+colnames(counts2)<-c("Gene","Control_1", "Control_2", "Control_3", "Test_1", "Test_2", "Test_3") 
+
+file3<-paste("pilotdata/Skin_1000DE/FC_2/for_Scotty/pilot3", i, ".csv", sep ="")
+write.table(counts2, file3, sep="\t", quote=FALSE,row.names=FALSE)
+
+i<-i+1
+if (i>10) break
+}
+```
+
+#
+##### Generate input file for PROPER
+```{r, echo=TRUE, results = "asis", warning = FALSE, message = FALSE, eval=FALSE} 
+
+rowVars=function(x) {
+  n0 <- ncol(x)
+  EX <- rowMeans(x, na.rm=TRUE)
+  EX2 <- rowMeans(x^2, na.rm=TRUE)
+  vv <- (EX2-EX^2) * n0 / (n0-1)
+  vv
+}
+
+## function to estimate and return parameters, including:
+## sequencing depth, sizefactors, log mean expressions, log OD
+est.param <- function(eset, idx) {
+  Y=exprs(eset)
+  if(!missing(idx))
+    Y=Y[,idx]
+  seqDepth=colSums(Y)
+  k=colSums(Y); k=k/median(k)
+  Y2=sweep(Y, 2, k, FUN="/")
+  m=rowMeans(Y2)
+  v=rowVars(Y2)
+  phi.g0 = phi.g = (v-m)/m^2
+  ## only keep those with good coverage
+  pct0=rowMeans(Y>0)
+  phi.g0=phi.g0[m>30 & pct0>0.8]
+  phi.g0=phi.g0[phi.g0>1e-5]
+  
+  ## for those with unobserved dispersion, sample from phi.g0
+  ii=(phi.g<=0.001) | is.na(phi.g)
+  phi.g[ii]=sample(phi.g0, sum(ii), replace=TRUE)
+  
+  res=list(seqDepth=seqDepth, sizefactor=k, lmean=log(m), lOD=log(phi.g))
+  res
+}
+
+
+i<-1
+repeat{
+file<-paste("pilotdata/Skin_1000DE/FC_2/pilot3",i,".csv", sep="")  
+counts <- as.matrix(read.csv(file, row.names=1))
+names<-row.names(counts)
+sample<-colnames(counts)
+
+# for 3 replicates, change it for other replicte values
+group<-as.factor(c(0,0,0,1,1,1)) 
+
+pData<-cbind(sample, group)
+row.names(pData)<-sample
+pData<-as.data.frame(pData)
+metadata <- data.frame(labelDescription= c("sample name", "treated/untreated"), row.names=colnames(pData))
+phenoData <- new("AnnotatedDataFrame", data=pData, varMetadata=metadata)
+
+eSet <- ExpressionSet(assayData=counts, phenoData=phenoData)
+param=est.param(eSet)
+
+# set fold change
+FC<-2
+logfc <- log2(FC)
+N<-as.numeric(dim(counts)[1])
+
+file4<-paste("pilotdata/Skin_1000DE/FC_2/for_PROPER/pilot3",i,".RData", sep="")
+save.image(file4)
+
+i<-i+1
+if (i>10) break
+}
+```
