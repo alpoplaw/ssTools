@@ -1,6 +1,6 @@
 # ssTools
 
-This repository contains all the code....
+This repository contains all the code for the simulation and sample size estimation in "Feasibility of sample size calculation for RNA-seq studies"
 
 ## Data for simulation
 
@@ -22,7 +22,9 @@ R codes for the simulation. Input see "Selecting 1000 DE genes".
 
 ##  Create Pilot Data
 
-R codes for generation of 10 pilot data. Input see "Selecting 1000 DE genes".     
+R codes for generation of 10 pilot data. Input see "Selecting 1000 DE genes".   
+
+## Estimate sample size using PROPER
 
 ## Contact
 
