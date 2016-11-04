@@ -24,8 +24,20 @@ R codes for the simulation. Input see "Selecting 1000 DE genes".
 
 R codes for generation of 10 pilot data. Input see "Selecting 1000 DE genes".   
 
-## Estimate sample size using PROPER
-
+## Sample Size Estimation
+Code to estimate the sample size using the 10 generated pilot data and the following tools:    
+PROPER http://www.bioconductor.org/packages/release/bioc/html/PROPER.html  
+RNASeqPowerCalculator http://www2.hawaii.edu/~lgarmire/RNASeqPowerCalculator.htm  
+RnaSeqSampleSize http://www.bioconductor.org/packages/release/bioc/html/RnaSeqSampleSize.html  
+ssizeRNA https://cran.r-project.org/web/packages/ssizeRNA/index.html  
+SSPA http://www.bioconductor.org/packages/release/bioc/html/SSPA.html  
+   
+For the estimation with Scotty the MATLAB code https://github.com/mbusby/Scotty, with the following command was used.  
+scottyEstimate('PATH to your working direction\pilotdata\Skin_1000DE\FC_2\for_Scotty\pilot31.csv',...
+    '3','3','75','2.5','0.05','80','2.541','2.541','8.874',...
+    '1000000','20','50000000','100000000','50','50','50',...
+    'PATH to your working direction\resluts\Skin_1000DE\FC_2\Scotty\31\');
+    
 ## Contact
 
 alpoplaw@uni-mainz.de
