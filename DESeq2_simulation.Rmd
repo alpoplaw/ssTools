@@ -42,7 +42,7 @@ simout<-mclapply(1:100, function(arg2){
     set.seed(arg*arg2)
     counts<-sample(e,arg*2, replace=FALSE)
     b<-sample(ne,arg, replace=FALSE)
-    counts[sG.names2,(1:arg)]<-b[sG.names2,]
+    counts[sG.names,(1:arg)]<-b[sG.names,]
     control <- paste0("control",1:arg)
     test <- paste0("test",1:arg)
     colnames(counts)<-cbind(control, test)
@@ -68,8 +68,7 @@ j<-1
 repeat{
   for ( i in 1:29 ) {
     deSig<- simout[[j]] [[i]] [which(simout[[j]] [[i]]$padj<0.05),]
-    #deSig<- deSig [which(deSig$logFC>=1),]
-    tp<-match(sG.names2,row.names(deSig))
+    tp<-match(sG.names,row.names(deSig))
     TP[j,i]<-length(which( !is.na(tp) )) #True Positives
   }
   j<-j+1
